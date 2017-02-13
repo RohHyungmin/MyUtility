@@ -16,6 +16,7 @@ import android.webkit.WebViewClient;
 public class ThreeFragment extends Fragment {
 
     WebView webView;
+    View view;
 
     public ThreeFragment() {
         // Required empty public constructor
@@ -24,8 +25,11 @@ public class ThreeFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
-        View view = inflater.inflate(R.layout.fragment_three, container, false);
+
+        if(view != null)
+        return view;
+
+        view = inflater.inflate(R.layout.fragment_three, container, false);
 
         webView = (WebView) view.findViewById(R.id.webView);
 
@@ -42,4 +46,12 @@ public class ThreeFragment extends Fragment {
         return view;
     }
 
+    public boolean goBack() {
+        if (webView.canGoBack()) {
+            webView.goBack();
+            return true;
+        }else {
+            return false;
+        }
+    }
 }

@@ -1,5 +1,7 @@
 package com.hyugnmin.android.myutility;
 
+import android.*;
+import android.Manifest;
 import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -17,10 +19,16 @@ import android.support.design.widget.TabLayout;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentStatePagerAdapter;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.widget.Toast;
+
+import com.hyugnmin.android.myutility.dummy.DummyContent;
+
+import java.util.ArrayList;
+import java.util.Stack;
 
 /* GPS 사용 순서
 1. manifest에 fine, coarse 권한 추가
@@ -32,14 +40,25 @@ import android.widget.Toast;
 6. 리스너 해제
 */
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements FiveFragment.OnListFragmentInteractionListener {
 
     //탭 및 페이저 속성 정의
-    final int TAB_COUNT = 4;
+    final int TAB_COUNT = 5;
     OneFragment one;
     TwoFragment two;
     ThreeFragment three;
     FourFragment four;
+    FiveFragment five;
+    private int page_position = 0;
+    ViewPager viewPager;
+    private final int REQ_CODE = 100;
+    private final int REQ_PERMISSION = 100; // 권한요청코드
+    FragmentManager fragmentManager;
+
+
+
+    Stack<Integer> pageStack = new Stack<>();
+    boolean backPress = false;
 
     //위치정보 관리자
     private LocationManager manager;
@@ -61,23 +80,49 @@ public class MainActivity extends AppCompatActivity {
         two = new TwoFragment();
         three = new ThreeFragment();
         four = new FourFragment();
+        five = FiveFragment.newInstance(3); //미리 정해진 그리드 가로축 개수
+
 
         //tab layout 정의
         TabLayout tabLayout = (TabLayout) findViewById(R.id.tab);
         //tab 생성 및 타이틀 입력
-        tabLayout.addTab(tabLayout.newTab().setText("Calculate"));
-        tabLayout.addTab(tabLayout.newTab().setText("Convert"));
-        tabLayout.addTab(tabLayout.newTab().setText("Search"));
-        tabLayout.addTab(tabLayout.newTab().setText("Locate"));
+        tabLayout.addTab(tabLayout.newTab().setText("계산"));
+        tabLayout.addTab(tabLayout.newTab().setText("변환"));
+        tabLayout.addTab(tabLayout.newTab().setText("검색"));
+        tabLayout.addTab(tabLayout.newTab().setText("위치"));
+        tabLayout.addTab(tabLayout.newTab().setText("카메라"));
 
         //fragment 페이저 작성
-        ViewPager viewPager = (ViewPager) findViewById(R.id.viewPager);
+        viewPager = (ViewPager) findViewById(R.id.viewPager);
         //아답터 세팅
         PagerAdapter adapter = new PagerAdapter(getSupportFragmentManager());
         viewPager.setAdapter(adapter);
 
         //pagerListener - 페이저가 변경되었을 때 탭을 바꿔주는 리스너
         viewPager.addOnPageChangeListener(new TabLayout.TabLayoutOnPageChangeListener(tabLayout));
+
+            //페이지 변경사항을 체크한다
+            viewPager.addOnPageChangeListener(new ViewPager.OnPageChangeListener() {
+                @Override
+                public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+
+                }
+
+                @Override
+                public void onPageSelected(int position) {
+                    if(!backPress) {
+                        pageStack.push(page_position);
+                    }else {
+                        backPress = false;
+                    }
+                    page_position = position;
+                }
+
+                @Override
+                public void onPageScrollStateChanged(int state) {
+
+                }
+            });
 
         //탭이 변경되었을 때 페이저를 바꿔주는 리스너
         tabLayout.addOnTabSelectedListener(new TabLayout.ViewPagerOnTabSelectedListener(viewPager));
@@ -90,18 +135,17 @@ public class MainActivity extends AppCompatActivity {
         Debug.stopMethodTracing();
     }
 
-    private final int REQ_CODE = 100;
+
+
+
     //1. 권한 체크
     @TargetApi(Build.VERSION_CODES.M) //target 지정 annotation
     private void checkPermission() {
-        // 1.1 런타임 권한 체크
-        if( checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
-                || checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            //1.2 요청할 권한 목록 작성
-            String permArr[] = {android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION};
-            //1.3 시스템에 권한 요청
-            requestPermissions(permArr, REQ_CODE);
-        }else {
+        if ( Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ) {
+            if( PermissionControl.checkPermission(this, REQ_PERMISSION) ){
+                init();
+            }
+        }else{
             init();
         }
     }
@@ -110,17 +154,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if(requestCode == REQ_CODE) {
-            //배열에 넘긴 런타임권한을 체크해서 승인이 됐으면
-            if(grantResults[0] == PackageManager.PERMISSION_GRANTED
-                    && grantResults[1] == PackageManager.PERMISSION_GRANTED
-                    && grantResults[2] == PackageManager.PERMISSION_GRANTED) {
-                //프로그램 실행
+        if(requestCode == REQ_PERMISSION){
+            if( PermissionControl.onCheckResult(grantResults)){
                 init();
-            } else {
-                Toast.makeText(this, "권한을 허용하지 않으시면 프로그램을 실행할 수 없습니다.", Toast.LENGTH_SHORT).show();
-                //선택 1 . 종료  / 2. 권한체크 다시 물어보기
-                finish();
+            }else{
+                Toast.makeText(this, "권한을 허용하지 않으시면 프로그램을 실행할 수 없습니다.", Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -174,6 +212,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void onListFragmentInteraction(DummyContent.DummyItem item) {
+
+    }
+
     //adapter 생성(fragment를 넣어야해서 기존과 좀 다르다)
     class PagerAdapter extends FragmentStatePagerAdapter {
 
@@ -191,6 +234,7 @@ public class MainActivity extends AppCompatActivity {
                 case 1 : fragment = two; break;
                 case 2 : fragment = three; break;
                 case 3 : fragment = four; break;
+                case 4 : fragment = five; break;
             }
             return fragment;
         }
@@ -200,4 +244,32 @@ public class MainActivity extends AppCompatActivity {
             return TAB_COUNT;
         }
     }
+
+    @Override
+    public void onBackPressed() {
+        switch (page_position) {
+            case 2:
+                //뒤로가기가 가능하면 아무런 동작을 하지 않는다
+                if(three.goBack()) {
+            }
+            else{
+                goBackStack();
+            }
+                break;
+            //위의 조건에 해당되지 않는 모든 케이스는 아래 로직으로 처리한다
+            default:
+                goBackStack();
+                break;
+        }
+    }
+
+    private void goBackStack() {
+        if(pageStack.size() < 1) {
+            super.onBackPressed();
+        } else {
+            backPress = true;
+            viewPager.setCurrentItem(pageStack.pop());
+        }
+    }
+
 }
